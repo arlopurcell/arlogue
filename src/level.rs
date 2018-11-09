@@ -1,14 +1,9 @@
 use tile::Tile;
-use monster::Monster;
+use monster::{MonsterList, MonsterType};
 
 pub struct Level {
     pub terrain: [[Tile; 20]; 20],
     pub monster_list: MonsterList,
-}
-
-pub struct MonsterList {
-    monsters: Vec<Monster>,
-    locations: Vec<(usize, usize)>, // column, row
 }
 
 pub enum Action {
@@ -25,38 +20,6 @@ pub enum Direction {
     UpRight,
     DownLeft,
     DownRight,
-}
-
-impl MonsterList {
-    fn new() -> MonsterList {
-        MonsterList {
-            monsters: Vec::new(),
-            locations: Vec::new(),
-        }
-    }
-
-    fn with_monster_locations<T>(monster_locations: T) -> MonsterList
-        where T: IntoIterator<Item = (Monster, (usize, usize))>, 
-    {
-        let (monsters, locations) = monster_locations.into_iter().unzip();
-        MonsterList {
-            monsters: monsters,
-            locations: locations,
-        }
-    }
-
-    fn add(&mut self, monster: Monster, column: usize, row: usize) {
-        self.monsters.push(monster);
-        self.locations.push((column, row));
-    }
-
-    pub fn get_monster_locations(&self) -> Vec<(&Monster, &(usize, usize))> {
-        self.monsters.iter().zip(self.locations.iter()).collect()
-    }
-
-    pub fn player_location(&self) -> (usize, usize) {
-        self.locations[0]
-    }
 }
 
 impl Level {
@@ -84,20 +47,22 @@ impl Level {
     }
 
     fn move_monster_by(&mut self, index: usize, col_change: isize, row_change: isize) -> bool {
-        let (old_col, old_row) = self.monster_list.locations[index];
-        self.move_monster_to(
-            index, 
-            (old_col as isize + col_change) as usize, 
-            (old_row as isize + row_change) as usize,
-        )
+        if let Some((old_col, old_row)) = self.monster_list.locations[index] {
+            self.move_monster_to(
+                index, 
+                (old_col as isize + col_change) as usize, 
+                (old_row as isize + row_change) as usize,
+                )
+        } else {
+            false
+        }
     }
 
     fn move_monster_to(&mut self, index: usize, new_col: usize, new_row: usize) -> bool {
         let available = !self.terrain[new_col][new_row].is_wall 
-            && !self.monster_list.locations.iter().any(|(col, row)| { *col == new_col && *row == new_row });
+            && !self.monster_list.locations.iter().filter_map(|&l| {l}).any(|(col, row)| { col == new_col && row == new_row });
         if available {
-            self.monster_list.locations[index].0 = new_col;
-            self.monster_list.locations[index].1 = new_row;
+            self.monster_list.locations[index] = Some((new_col, new_row));
             true
         } else {
             false
@@ -465,8 +430,8 @@ impl Level {
                 [Tile::nothing(); 20],
             ],
             monster_list: MonsterList::with_monster_locations(vec!(
-                (Monster::player(), (7, 7)), 
-                (Monster::ant(), (12, 12)),
+                (MonsterType::Player, (7, 7)), 
+                (MonsterType::Ant, (12, 12)),
             )),
         }
     }

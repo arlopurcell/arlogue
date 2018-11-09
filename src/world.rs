@@ -13,7 +13,6 @@ use level::{
     Action::*,
     Direction::*,
 };
-use monster::Monster;
 
 pub const SCREEN_SIZE: Vector = Vector {x: 800.0, y: 600.0};
 
@@ -56,11 +55,12 @@ impl State for World {
         window.clear(Color::BLACK)?;
         let level = &self.current_level;
         self.sprite_sheet.execute(|sprite_sheet| {
-            let player_location = level.monster_list.player_location();
-            window.set_view(View::new(Rectangle::new(
-                        Vector::new(player_location.0 as f32, player_location.1 as f32).times(sprite_sheet.sprite_size) - (SCREEN_SIZE / 2),
-                        SCREEN_SIZE
-            )));
+            if let Some(player_location) = level.monster_list.player_location() {
+                window.set_view(View::new(Rectangle::new(
+                            Vector::new(player_location.0 as f32, player_location.1 as f32).times(sprite_sheet.sprite_size) - (SCREEN_SIZE / 2),
+                            SCREEN_SIZE
+                )));
+            }
             for row in 0..20 {
                 for col in 0..20 {
                     let tile_rect = Rectangle::new(Vector::new((32 * col) as u32, (32 * row) as u32), sprite_sheet.sprite_size);
@@ -70,9 +70,9 @@ impl State for World {
                     }
                 }
             }
-            for (monster, (col, row)) in level.monster_list.get_monster_locations() {
+            for (sprite_index, (col, row)) in level.monster_list.sprite_locations() {
                 let tile_rect = Rectangle::new(Vector::new((32 * col) as u32, (32 * row) as u32), sprite_sheet.sprite_size);
-                let monster_img = &sprite_sheet.get(monster.sprite_index);
+                let monster_img = &sprite_sheet.get(sprite_index);
                 window.draw(&tile_rect, Img(monster_img));
             }
             Ok(())
