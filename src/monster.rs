@@ -7,7 +7,7 @@ pub struct Monster {
     stats: StatBlock,
     pub caster: Caster,
     pub sprite_index: usize,
-    mtype: MonsterType,
+    pub mtype: MonsterType,
 }
 
 #[derive(Copy, Clone)]

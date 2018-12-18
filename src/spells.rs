@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 
 use crate::level::Level;
-use crate::utils::Location;
+use crate::utils::{Location, Direction};
 use crate::monster::Monster;
 
 pub struct Caster {
@@ -68,16 +68,16 @@ impl Spellbook {
         spell_table.insert("wait".to_string(), 8);
         Spellbook {
             commands: vec!(
-                Command::Move(-1, 0),
+                Command::Move(Direction::Left),
                 Command::Return,
 
-                Command::Move(1, 0),
+                Command::Move(Direction::Right),
                 Command::Return,
 
-                Command::Move(0, -1),
+                Command::Move(Direction::Up),
                 Command::Return,
 
-                Command::Move(0, 1),
+                Command::Move(Direction::Down),
                 Command::Return,
 
                 Command::Return,
@@ -115,7 +115,7 @@ enum Command {
     PromptLocation, // result in registers x, y
 
     Damage(Vec<(usize, usize, u32)>), // x, y, energy
-    Move(isize, isize), // x, y (relative)
+    Move(Direction), // x, y (relative)
     Conjure(usize, u32), // spell label, energy -> result in c
     Launch(usize, usize, usize), // object, x, y
 }
@@ -271,9 +271,20 @@ impl SpellEngine {
                         // TODO change to single target
                         Some("Damage not done yet".to_string())
                     },
-                    Command::Move(x, y) => {
+                    Command::Move(direction) => {
                         let (old_col, old_row) = self.level.location(&caster_ref);
-                        let loc = (old_col as isize + *x, old_row as isize + *y);
+                        let (x, y) = match direction {
+                            Direction::Left => (-1, 0),
+                            Direction::Right => (1, 0),
+                            Direction::Up => (0, -1),
+                            Direction::Down => (0, 1),
+                            Direction::UpLeft => (-1, -1),
+                            Direction::UpRight => (1, -1),
+                            Direction::DownLeft => (-1, 1),
+                            Direction::DownRight => (1, 1),
+                        };
+                            
+                        let loc = (old_col as isize + x, old_row as isize + y);
                         
                         if self.level.is_available(loc) {
                             if self.level.cast(&caster_ref, 10) {

@@ -2,16 +2,12 @@ use quicksilver::{
     Future,
     Result,
     lifecycle::{State, Window, Asset, Event},
-    graphics::{Image, Color, Background::Img, View, Font, FontStyle},
-    geom::{Rectangle, Vector, Shape},
+    graphics::{Image, Color, Background::Img, View, Font, FontStyle, Mesh, Drawable, Background::Col},
+    geom::{Rectangle, Vector, Shape, Transform},
     input::{Key, ButtonState}
 };
 
-use crate::level::{
-    Level,
-    Action::*,
-    Direction::*,
-};
+use crate::level::Level;
 use crate::spells::{SpellEngine, Spellbook, CasterRef};
 
 pub const SCREEN_SIZE: Vector = Vector {x: 800.0, y: 600.0};
@@ -31,8 +27,8 @@ impl SpriteSheet {
 
 pub struct World {
     // TODO saved levels
-    sprite_sheet: Asset<SpriteSheet>,
-    font: Asset<Font>,
+    assets: Asset<(SpriteSheet, Font)>,
+    mesh: Mesh,
     message: Option<String>,
     spell_engine: SpellEngine,
     player_spellbook: Spellbook,
@@ -46,56 +42,59 @@ impl State for World {
             spell_engine: SpellEngine::new(Level::stupid()),
             player_spellbook: Spellbook::basic(),
             monster_spellbook: Spellbook::basic(),
-            font: Asset::new(Font::load("font.ttf")),
             message: None,
-            sprite_sheet: Asset::new(image.map(|image| {
+            assets: Asset::new(image.map(|image| {
                 SpriteSheet {
                     image: image,
                     sprite_size: Vector::new(32, 32),
                     rows: 37,
                     columns: 40,
                 }
-            })),
+            }).join(Font::load("font.ttf"))
+            ),
+            mesh: Mesh::new(),
         })
     }
 
     fn draw(&mut self, window: &mut Window) -> Result<()> {
-        window.clear(Color::BLACK)?;
         let message = &self.message;
-        self.font.execute(|font| {
+        let level = &self.spell_engine.level;
+        let mut mesh = &mut self.mesh;
+        mesh.clear();
+        self.assets.execute(|(sprite_sheet, font)| {
             if let Some(msg) = message {
                 let style = FontStyle::new(24.0, Color::WHITE);
                 let image = font.render(&msg, &style)?;
-                window.set_view(View::new(Rectangle::new(Vector::new(0, 0), SCREEN_SIZE)));
-                window.draw(&Rectangle::new(Vector::new(0, 0), image.area().size()), Img(&image));
+                Rectangle::new(Vector::new(0, 0), image.area().size()).draw(mesh, Img(&image), Transform::IDENTITY, 20);
             }
-            Ok(())
-        })?;
 
-        let level = &self.spell_engine.level;
-        self.sprite_sheet.execute(|sprite_sheet| {
-            let (col, row) = level.monsters[0].location();
-            window.set_view(View::new(Rectangle::new(
-                        Vector::new(col as f32, row as f32).times(sprite_sheet.sprite_size) - (SCREEN_SIZE / 2),
-                        SCREEN_SIZE
-            )));
+            let camera = {
+                let (col, row) = level.monsters[0].location();
+                Transform::translate(
+                    (Vector::new(col as f32, row as f32).times(sprite_sheet.sprite_size) - (SCREEN_SIZE / 2)) * -1
+                )
+            };
+
+            // TODO this can be rendered on it's own mesh and only drawn when the level is loaded
             for row in 0..20 {
                 for col in 0..20 {
                     let tile_rect = Rectangle::new(Vector::new((32 * col) as u32, (32 * row) as u32), sprite_sheet.sprite_size);
                     if let Some(sprite_index) = level.terrain[col][row].sprite_index{
                         let tile_img = &sprite_sheet.get(sprite_index);
-                        window.draw(&tile_rect, Img(tile_img));
+                        tile_rect.draw(mesh, Img(tile_img), camera, 0);
                     }
                 }
             }
             for monster in level.monsters.iter() {
                 let (col, row) = monster.location();
-                let tile_rect = Rectangle::new(Vector::new((32 * col) as u32, (32 * row) as u32), sprite_sheet.sprite_size);
+                let monster_rect = Rectangle::new(Vector::new((32 * col) as u32, (32 * row) as u32), sprite_sheet.sprite_size);
                 let monster_img = &sprite_sheet.get(monster.sprite_index);
-                window.draw(&tile_rect, Img(monster_img));
+                monster_rect.draw(mesh, Img(monster_img), camera, 10);
             }
             Ok(())
         })?;
+        window.clear(Color::BLACK)?;
+        window.mesh().extend(mesh);
         Ok(())
     }
 
@@ -103,24 +102,13 @@ impl State for World {
         match event {
             Event::Key(key, state) => match state {
                 ButtonState::Pressed => {
-                    /*
-                    let error_msg = match key {
-                        Key::Left => self.spell_engine.cast(CasterRef::Monster(0), &self.player_spellbook, "left"),
-                        Key::Right => self.spell_engine.cast(CasterRef::Monster(0), &self.player_spellbook, "right"),
-                        Key::Up => self.spell_engine.cast(CasterRef::Monster(0), &self.player_spellbook, "up"),
-                        Key::Down => self.spell_engine.cast(CasterRef::Monster(0), &self.player_spellbook, "down"),
-                        // TODO diagonals
-                        Key::Left => self.spell_engine.cast(CasterRef::Monster(0), &self.player_spellbook, "wait"),
-                        _ => None,
-                    };
-                    */
                     let spell = match key {
                         Key::Left => Some("left"),
                         Key::Right => Some("right"),
                         Key::Up => Some("up"),
                         Key::Down => Some("down"),
                         // TODO diagonals
-                        Key::Left => Some("wait"),
+                        Key::Period => Some("wait"),
                         _ => None,
                     };
                     if let Some(spell) = spell {
@@ -135,5 +123,6 @@ impl State for World {
         Ok(())
     }
 }
+
 
 

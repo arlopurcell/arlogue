@@ -10,22 +10,6 @@ pub struct Level {
     pub monsters: Vec<Monster>,
 }
 
-pub enum Action {
-    Wait,
-    Move(Direction),
-}
-
-pub enum Direction {
-    Left,
-    Right,
-    Up,
-    Down,
-    UpLeft,
-    UpRight,
-    DownLeft,
-    DownRight,
-}
-
 impl Level {
     pub fn cast(&mut self, caster_ref: &CasterRef, cost: u32) -> bool { // false if not enough energy
         self.caster_mut(caster_ref).cast(cost)
@@ -42,8 +26,27 @@ impl Level {
     }
 
     pub fn get_spell(&self, caster_ref: &CasterRef) -> &'static str {
-        // TODO
-        "right"
+        match caster_ref {
+            CasterRef::Player => "wait",
+            CasterRef::Monster(index) => {
+                let (my_x, my_y) = self.location(caster_ref);
+                let (player_x, player_y) = self.location(&CasterRef::Player);
+                if player_x > my_x {
+                    if player_y > my_y { "wait" }
+                    else if player_y < my_y { "wait" } 
+                    else { "right" }
+                } else if player_x < my_x {
+                    if player_y > my_y { "wait" }
+                    else if player_y < my_y { "wait" } 
+                    else { "left" }
+                } else {
+                    if player_y > my_y { "down" }
+                    else if player_y < my_y { "up" } 
+                    else { "wait" }
+                }
+
+            },
+        }
     }
 
     fn caster(&self, caster_ref: &CasterRef) -> &Caster {
@@ -69,54 +72,6 @@ impl Level {
                 && !self.monsters.iter().any(|monster| { monster.location() == (col as usize, row as usize) })
         }
     }
-
-    /*
-    pub fn do_turn(&mut self, action: Action) {
-        let did_action = match action {
-            Action::Move(dir) => self.move_monster(0, dir),
-            Action::Wait => true,
-        };
-        if did_action {
-            // TODO other monsters' turns
-        }
-    }
-
-    fn move_monster(&mut self, index: usize, dir: Direction) -> bool {
-        match dir {
-            Direction::Left => self.move_monster_by(index, -1, 0),
-            Direction::Right => self.move_monster_by(index, 1, 0),
-            Direction::Up => self.move_monster_by(index, 0, -1),
-            Direction::Down => self.move_monster_by(index, 0, 1),
-            Direction::UpLeft => self.move_monster_by(index, -1, -1),
-            Direction::UpRight => self.move_monster_by(index, 1, -1),
-            Direction::DownLeft => self.move_monster_by(index, -1, 1),
-            Direction::DownRight => self.move_monster_by(index, 1, 1),
-        }
-    }
-
-    fn move_monster_by(&mut self, index: usize, col_change: isize, row_change: isize) -> bool {
-        if let Some((old_col, old_row)) = self.monster_list.locations[index] {
-            self.move_monster_to(
-                index, 
-                (old_col as isize + col_change) as usize, 
-                (old_row as isize + row_change) as usize,
-                )
-        } else {
-            false
-        }
-    }
-
-    fn move_monster_to(&mut self, index: usize, new_col: usize, new_row: usize) -> bool {
-        let available = !self.terrain[new_col][new_row].is_wall 
-            && !self.monster_list.locations.iter().filter_map(|&l| {l}).any(|(col, row)| { col == new_col && row == new_row });
-        if available {
-            self.monster_list.locations[index] = Some((new_col, new_row));
-            true
-        } else {
-            false
-        }
-    }
-    */
 
     pub fn stupid() -> Level {
         Level {
