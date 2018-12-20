@@ -55,13 +55,6 @@ pub struct Spellbook {
 }
 
 impl Spellbook {
-    pub fn empty() -> Spellbook {
-        Spellbook {
-            commands: Vec::new(),
-            spell_table: HashMap::new(),
-        }
-    }
-
     pub fn monster_spellbook() -> Spellbook {
         let list: Vec<(Option<&str>, Command)> = cmdlist::CmdListParser::new().parse(MONSTER_SPELLBOOK).unwrap();
         let (labels, commands): (Vec<_>, Vec<_>) = list.into_iter().unzip();
@@ -80,54 +73,6 @@ impl Spellbook {
         }).collect();
         Spellbook {
             commands: commands,
-            spell_table: spell_table,
-        }
-    }
-
-    pub fn basic() -> Spellbook {
-        let mut spell_table = HashMap::new();
-        spell_table.insert("left".to_string(), 0);
-        spell_table.insert("right".to_string(), 2);
-        spell_table.insert("up".to_string(), 4);
-        spell_table.insert("down".to_string(), 6);
-        spell_table.insert("wait".to_string(), 8);
-        spell_table.insert("attack_left".to_string(), 9);
-        spell_table.insert("attack_right".to_string(), 12);
-        spell_table.insert("attack_up".to_string(), 15);
-        spell_table.insert("attack_down".to_string(), 18);
-        Spellbook {
-            commands: vec!(
-                Command::Move(Direction::Left),
-                Command::Return,
-
-                Command::Move(Direction::Right),
-                Command::Return,
-
-                Command::Move(Direction::Up),
-                Command::Return,
-
-                Command::Move(Direction::Down),
-                Command::Return,
-
-                Command::Return,
-
-                Command::MoveCursor(Direction::Left),
-                Command::Damage(5),
-                Command::Return,
-
-                Command::MoveCursor(Direction::Right),
-                Command::Damage(5),
-                Command::Return,
-
-                Command::MoveCursor(Direction::Up),
-                Command::Damage(5),
-                Command::Return,
-
-                Command::MoveCursor(Direction::Down),
-                Command::Damage(5),
-                Command::Return,
-
-            ),
             spell_table: spell_table,
         }
     }
@@ -163,9 +108,9 @@ pub enum Command {
     PromptDirection, // result in registers x, y
     PromptLocation, // result in registers x, y
 
-    MoveCursor(Direction),
+    MoveCursor(usize),
     Damage(usize), // energy
-    Move(Direction),
+    Move(usize),
     //Conjure(usize, i32), // spell label, energy -> result in c
     //Launch(usize, usize, usize), // object, x, y
 
@@ -320,17 +265,21 @@ impl SpellEngine {
                     },
                     Command::PromptDirection => Some("Prompting not yet supported".to_string()),
                     Command::PromptLocation => Some("Prompting not yet supported".to_string()),
-                    Command::MoveCursor(direction) => {
-                        if let Some(loc) = self.level.reify_location(direction.location(), &self.level.location(&caster_ref)) {
-                            // TODO cursor move energy cost?
-                            if self.level.cast(&caster_ref, 5) {
-                                cursor = loc;
-                                None
+                    Command::MoveCursor(register) => {
+                        if let Some(direction) = Direction::from_num(self.registers[*register]) {
+                            if let Some(loc) = self.level.reify_location(direction.location(), &self.level.location(&caster_ref)) {
+                                // TODO cursor move energy cost?
+                                if self.level.cast(&caster_ref, 5) {
+                                    cursor = loc;
+                                    None
+                                } else {
+                                    Some("Not enough energy to move cursor".to_string())
+                                }
                             } else {
-                                Some("Not enough energy to move cursor".to_string())
+                                Some("Invalid location".to_string())
                             }
                         } else {
-                            Some("Invalid location".to_string())
+                            Some("Invalid direction".to_string())
                         }
                     },
                     Command::Damage(register) => {
@@ -348,23 +297,27 @@ impl SpellEngine {
                             Some("Nobdy there to attack".to_string())
                         }
                     },
-                    Command::Move(direction) => {
-                        if let Some(loc) = self.level.reify_location(direction.location(), &self.level.location(&caster_ref)) {
-                            if self.level.is_passable(&loc) && !self.level.is_monster(&loc) {
-                                if self.level.cast(&caster_ref, 10) {
-                                    // TODO check if valid move
-                                    // TODO multiply cost by distance moved or just check that it's
-                                    // adjacent?
-                                    self.level.move_to(&caster_ref, loc);
-                                    None
+                    Command::Move(register) => {
+                        if let Some(direction) = Direction::from_num(self.registers[*register]) {
+                            if let Some(loc) = self.level.reify_location(direction.location(), &self.level.location(&caster_ref)) {
+                                if self.level.is_passable(&loc) && !self.level.is_monster(&loc) {
+                                    if self.level.cast(&caster_ref, 10) {
+                                        // TODO check if valid move
+                                        // TODO multiply cost by distance moved or just check that it's
+                                        // adjacent?
+                                        self.level.move_to(&caster_ref, loc);
+                                        None
+                                    } else {
+                                        Some("Not enough energy to move".to_string())
+                                    }
                                 } else {
-                                    Some("Not enough energy to move".to_string())
+                                    Some("That space is occupied".to_string())
                                 }
                             } else {
-                                Some("That space is occupied".to_string())
+                                Some("Invalid location".to_string())
                             }
                         } else {
-                            Some("Invalid location".to_string())
+                            Some("Invalid direction".to_string())
                         }
                     },
                     //Command::Conjure(_spell, _energy) => Some("conjuring not yet supported".to_string()),

@@ -25,4 +25,18 @@ impl Direction {
             Direction::DownRight => (1, 1),
         }
     }
+
+    pub fn from_num(input: i32) -> Option<Direction> {
+        match input {
+            0 => Some(Direction::Left),
+            1 => Some(Direction::Right),
+            2 => Some(Direction::Up),
+            3 => Some(Direction::Down),
+            4 => Some(Direction::UpLeft),
+            5 => Some(Direction::UpRight),
+            6 => Some(Direction::DownLeft),
+            7 => Some(Direction::DownRight),
+            _ => None,
+        }
+    }
 }
