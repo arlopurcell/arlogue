@@ -4,7 +4,7 @@ use crate::utils::Location;
 const MAX_PER_LEVEL: usize = 200;
 
 pub struct Monster {
-    stats: StatBlock,
+    pub stats: StatBlock,
     pub caster: Caster,
     pub sprite_index: usize,
     pub mtype: MonsterType,
@@ -12,8 +12,8 @@ pub struct Monster {
 
 #[derive(Copy, Clone)]
 pub struct StatBlock {
-    pub max_hp: u16,
-    pub current_hp: u16,
+    pub max_hp: u32,
+    pub current_hp: u32,
     pub ac: u8,
     // TODO more stuff, resistances, etc.
 }

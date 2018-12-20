@@ -73,6 +73,28 @@ impl Level {
         }
     }
 
+    pub fn is_monster(&self, location: (isize, isize)) -> bool {
+        let (col, row) = location;
+        if col < 0 || row < 0 || col >= LEVEL_SIZE as isize || row >= LEVEL_SIZE as isize {
+            false
+        } else {
+            self.monsters.iter().any(|monster| { monster.location() == (col as usize, row as usize) })
+        }
+    }
+
+    pub fn damage(&mut self, location: (isize, isize), damage: u32) {
+        let (col, row) = location;
+        let index = self.monsters.iter().position(|monster| { monster.location() == (col as usize, row as usize) });
+        if let Some(index) = index {
+            // TODO implement AC and such
+            self.monsters[index].stats.current_hp -= damage;
+            if self.monsters[index].stats.current_hp <= 0 {
+                self.monsters.remove(index);
+                // TODO handle player death
+            }
+        }
+    }
+
     pub fn stupid() -> Level {
         Level {
             /*

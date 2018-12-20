@@ -66,6 +66,10 @@ impl Spellbook {
         spell_table.insert("up".to_string(), 4);
         spell_table.insert("down".to_string(), 6);
         spell_table.insert("wait".to_string(), 8);
+        spell_table.insert("attack_left".to_string(), 9);
+        spell_table.insert("attack_right".to_string(), 11);
+        spell_table.insert("attack_up".to_string(), 13);
+        spell_table.insert("attack_down".to_string(), 15);
         Spellbook {
             commands: vec!(
                 Command::Move(Direction::Left),
@@ -80,6 +84,18 @@ impl Spellbook {
                 Command::Move(Direction::Down),
                 Command::Return,
 
+                Command::Return,
+
+                Command::Damage((Direction::Left, 10)),
+                Command::Return,
+
+                Command::Damage((Direction::Right, 10)),
+                Command::Return,
+
+                Command::Damage((Direction::Up, 10)),
+                Command::Return,
+
+                Command::Damage((Direction::Down, 10)),
                 Command::Return,
             ),
             spell_table: spell_table,
@@ -114,8 +130,8 @@ enum Command {
     PromptDirection, // result in registers x, y
     PromptLocation, // result in registers x, y
 
-    Damage(Vec<(usize, usize, u32)>), // x, y, energy
-    Move(Direction), // x, y (relative)
+    Damage((Direction, u32)), // guy to hit, energy
+    Move(Direction),
     Conjure(usize, u32), // spell label, energy -> result in c
     Launch(usize, usize, usize), // object, x, y
 }
@@ -266,10 +282,31 @@ impl SpellEngine {
                     },
                     Command::PromptDirection => Some("Prompting not yet supported".to_string()),
                     Command::PromptLocation => Some("Prompting not yet supported".to_string()),
-                    Command::PromptLocation => Some("Prompting not yet supported".to_string()),
-                    Command::Damage(_targets) => {
-                        // TODO change to single target
-                        Some("Damage not done yet".to_string())
+                    Command::Damage((direction, energy)) => {
+                        let (old_col, old_row) = self.level.location(&caster_ref);
+                        let (x, y) = match direction {
+                            Direction::Left => (-1, 0),
+                            Direction::Right => (1, 0),
+                            Direction::Up => (0, -1),
+                            Direction::Down => (0, 1),
+                            Direction::UpLeft => (-1, -1),
+                            Direction::UpRight => (1, -1),
+                            Direction::DownLeft => (-1, 1),
+                            Direction::DownRight => (1, 1),
+                        };
+                            
+                        let loc = (old_col as isize + x, old_row as isize + y);
+                        // TODO convert energy to damage
+                        if self.level.is_monster(loc) {
+                            if self.level.cast(&caster_ref, *energy) {
+                                self.level.damage(loc, *energy);
+                                None
+                            } else {
+                                Some("Not enough energy to attack".to_string())
+                            }
+                        } else {
+                            Some("Nobdy there to attack".to_string())
+                        }
                     },
                     Command::Move(direction) => {
                         let (old_col, old_row) = self.level.location(&caster_ref);

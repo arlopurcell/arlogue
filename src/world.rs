@@ -75,7 +75,7 @@ impl State for World {
                 )
             };
 
-            // TODO this can be rendered on it's own mesh and only drawn when the level is loaded
+            // TODO this can be rendered on its own mesh and only drawn when the level is loaded
             for row in 0..20 {
                 for col in 0..20 {
                     let tile_rect = Rectangle::new(Vector::new((32 * col) as u32, (32 * row) as u32), sprite_sheet.sprite_size);
@@ -109,6 +109,13 @@ impl State for World {
                         Key::Down => Some("down"),
                         // TODO diagonals
                         Key::Period => Some("wait"),
+
+                        Key::A => Some("attack_left"),
+                        Key::D => Some("attack_right"),
+                        Key::W => Some("attack_up"),
+                        Key::S => Some("attack_down"),
+                        // TODO diagonals
+                        // TODO
                         _ => None,
                     };
                     if let Some(spell) = spell {
