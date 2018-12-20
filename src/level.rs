@@ -15,6 +15,10 @@ impl Level {
         self.caster_mut(caster_ref).cast(cost)
     }
 
+    pub fn get_energy(&self, caster_ref: &CasterRef) -> u32 {
+        self.caster(caster_ref).energy
+    }
+
     pub fn move_to(&mut self, caster_ref: &CasterRef, location: Location) { self.caster_mut(caster_ref).move_to(location) }
 
     pub fn regen(&mut self, caster_ref: &CasterRef) {
@@ -63,28 +67,31 @@ impl Level {
         }
     }
 
-    pub fn is_available(&self, location: (isize, isize)) -> bool {
-        let (col, row) = location;
-        if col < 0 || row < 0 || col >= LEVEL_SIZE as isize || row >= LEVEL_SIZE as isize {
+    pub fn is_available(&self, location: &(isize, isize)) -> bool {
+        if !self.is_valid_location(location) {
             false
         } else {
-            !self.terrain[col as usize][row as usize].is_wall 
-                && !self.monsters.iter().any(|monster| { monster.location() == (col as usize, row as usize) })
+            let loc = (location.0 as usize, location.1 as usize);
+            self.is_passable(&loc) && !self.is_monster(&loc)
         }
     }
 
-    pub fn is_monster(&self, location: (isize, isize)) -> bool {
-        let (col, row) = location;
-        if col < 0 || row < 0 || col >= LEVEL_SIZE as isize || row >= LEVEL_SIZE as isize {
-            false
-        } else {
-            self.monsters.iter().any(|monster| { monster.location() == (col as usize, row as usize) })
-        }
+    pub fn is_valid_location(&self, location: &(isize, isize)) -> bool {
+        let (col, row) = *location;
+        !(col < 0 || row < 0 || col >= LEVEL_SIZE as isize || row >= LEVEL_SIZE as isize)
     }
 
-    pub fn damage(&mut self, location: (isize, isize), damage: u32) {
-        let (col, row) = location;
-        let index = self.monsters.iter().position(|monster| { monster.location() == (col as usize, row as usize) });
+    pub fn is_passable(&self, location: &Location) -> bool {
+        let (col, row) = *location;
+        !self.terrain[col][row].is_wall 
+    }
+
+    pub fn is_monster(&self, location: &Location) -> bool {
+        self.monsters.iter().any(|monster| { monster.location() == *location })
+    }
+
+    pub fn damage(&mut self, location: &Location, damage: u32) {
+        let index = self.monsters.iter().position(|monster| { monster.location() == *location });
         if let Some(index) = index {
             // TODO implement AC and such
             self.monsters[index].stats.current_hp -= damage;

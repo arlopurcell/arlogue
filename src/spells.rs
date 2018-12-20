@@ -7,7 +7,7 @@ use crate::monster::Monster;
 
 pub struct Caster {
     pub location: Location,
-    energy: u32,
+    pub energy: u32,
     max_energy: u32,
     energy_regen: u32,
 }
@@ -67,9 +67,9 @@ impl Spellbook {
         spell_table.insert("down".to_string(), 6);
         spell_table.insert("wait".to_string(), 8);
         spell_table.insert("attack_left".to_string(), 9);
-        spell_table.insert("attack_right".to_string(), 11);
-        spell_table.insert("attack_up".to_string(), 13);
-        spell_table.insert("attack_down".to_string(), 15);
+        spell_table.insert("attack_right".to_string(), 12);
+        spell_table.insert("attack_up".to_string(), 15);
+        spell_table.insert("attack_down".to_string(), 18);
         Spellbook {
             commands: vec!(
                 Command::Move(Direction::Left),
@@ -86,17 +86,22 @@ impl Spellbook {
 
                 Command::Return,
 
-                Command::Damage((Direction::Left, 10)),
+                Command::MoveCursor(Direction::Left),
+                Command::Damage(5),
                 Command::Return,
 
-                Command::Damage((Direction::Right, 10)),
+                Command::MoveCursor(Direction::Right),
+                Command::Damage(5),
                 Command::Return,
 
-                Command::Damage((Direction::Up, 10)),
+                Command::MoveCursor(Direction::Up),
+                Command::Damage(5),
                 Command::Return,
 
-                Command::Damage((Direction::Down, 10)),
+                Command::MoveCursor(Direction::Down),
+                Command::Damage(5),
                 Command::Return,
+
             ),
             spell_table: spell_table,
         }
@@ -130,10 +135,19 @@ enum Command {
     PromptDirection, // result in registers x, y
     PromptLocation, // result in registers x, y
 
-    Damage((Direction, u32)), // guy to hit, energy
+    MoveCursor(Direction),
+    Damage(u32), // energy
     Move(Direction),
     Conjure(usize, u32), // spell label, energy -> result in c
     Launch(usize, usize, usize), // object, x, y
+
+    // Data queries
+    QueryEnergy, // result in register e
+    QueryLocationSelf, // result in x, y
+    QueryLocationCursor, // result in x, y
+    QueryValidLocation, // params x, y - result r (bool)
+    QueryPassableLocation, // params x, y - result r (bool)
+    QueryMonsterLocation, // params x, y - result r (bool)
 }
 
 pub struct SpellEngine {
@@ -182,6 +196,7 @@ impl SpellEngine {
         if let Some(i) = spellbook.spell_table.get(spell) {
             let mut result = None;
             let mut instruction_pointer = *i;
+            let mut cursor = self.level.location(&caster_ref).clone();
             while result.is_none() {
                 if instruction_pointer >= spellbook.commands.len() {
                     return Some("Unexpected end of execution".to_string())
@@ -282,7 +297,7 @@ impl SpellEngine {
                     },
                     Command::PromptDirection => Some("Prompting not yet supported".to_string()),
                     Command::PromptLocation => Some("Prompting not yet supported".to_string()),
-                    Command::Damage((direction, energy)) => {
+                    Command::MoveCursor(direction) => {
                         let (old_col, old_row) = self.level.location(&caster_ref);
                         let (x, y) = match direction {
                             Direction::Left => (-1, 0),
@@ -296,10 +311,23 @@ impl SpellEngine {
                         };
                             
                         let loc = (old_col as isize + x, old_row as isize + y);
+                        if !self.level.is_valid_location(&loc) {
+                            Some("Invalid location".to_string())
+                        } else {
+                            // TODO cursor move energy cost?
+                            if self.level.cast(&caster_ref, 5) {
+                                cursor = (loc.0 as usize, loc.1 as usize);
+                                None
+                            } else {
+                                Some("Not enough energy to move cursor".to_string())
+                            }
+                        }
+                    },
+                    Command::Damage(energy) => {
                         // TODO convert energy to damage
-                        if self.level.is_monster(loc) {
+                        if self.level.is_monster(&cursor) {
                             if self.level.cast(&caster_ref, *energy) {
-                                self.level.damage(loc, *energy);
+                                self.level.damage(&cursor, *energy);
                                 None
                             } else {
                                 Some("Not enough energy to attack".to_string())
@@ -323,7 +351,7 @@ impl SpellEngine {
                             
                         let loc = (old_col as isize + x, old_row as isize + y);
                         
-                        if self.level.is_available(loc) {
+                        if self.level.is_available(&loc) {
                             if self.level.cast(&caster_ref, 10) {
                                 // TODO check if valid move
                                 // TODO multiply cost by distance moved or just check that it's
@@ -339,12 +367,60 @@ impl SpellEngine {
                     },
                     Command::Conjure(_spell, _energy) => Some("conjuring not yet supported".to_string()),
                     Command::Launch(_object, _x, _y) => Some("launching not yet supported".to_string()),
+                    Command::QueryEnergy => {
+                        self.registers[4] = self.level.get_energy(&caster_ref) as i32;
+                        None
+                    },
+                    Command::QueryLocationSelf => {
+                        let (x, y) = self.level.location(&caster_ref);
+                        self.registers[23] = x as i32;
+                        self.registers[24] = y as i32;
+                        None
+                    },
+                    Command::QueryLocationCursor => {
+                        self.registers[23] = cursor.0 as i32;
+                        self.registers[24] = cursor.1 as i32;
+                        None
+                    },
+                    Command::QueryValidLocation => {
+                        // TODO check i32 -> isize conversion?
+                        let loc = (self.registers[23] as isize, self.registers[24] as isize);
+                        self.registers[17] = if self.level.is_valid_location(&loc) { 1 } else { 0 };
+                        None
+                    },
+                    Command::QueryPassableLocation => {
+                        // TODO check i32 -> isize conversion?
+                        let loc = (self.registers[23] as isize, self.registers[24] as isize);
+                        self.registers[17] = 
+                            if self.level.is_valid_location(&loc) && self.level.is_passable(&(loc.0 as usize, loc.1 as usize)) {
+                                1
+                            } else { 0 };
+                        None
+                    },
+                    Command::QueryMonsterLocation => {
+                        // TODO check i32 -> isize conversion?
+                        let loc = (self.registers[23] as isize, self.registers[24] as isize);
+                        self.registers[17] = 
+                            if self.level.is_valid_location(&loc) && self.level.is_monster(&(loc.0 as usize, loc.1 as usize)) {
+                                1
+                            } else { 0 };
+                        None
+                    },
                 }
             }
+            self.clear();
             result
         } else {
             Some("Unknown spell".to_string())
         }
+    }
+
+    fn clear(&mut self) {
+        for i in 0..26 {
+            self.registers[i] = 0;
+        }
+        self.stack.clear();
+        self.call_stack.clear();
     }
 }
 
