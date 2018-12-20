@@ -4,6 +4,9 @@ use std::ops::DerefMut;
 use crate::level::Level;
 use crate::utils::{AbsoluteLocation, RelativeLocation, Direction};
 use crate::monster::Monster;
+use constants::MONSTER_SPELLBOOK;
+
+lalrpop_mod!(pub cmdlist); // synthesized by LALRPOP
 
 pub struct Caster {
     pub location: AbsoluteLocation,
@@ -59,6 +62,28 @@ impl Spellbook {
         }
     }
 
+    pub fn monster_spellbook() -> Spellbook {
+        let list: Vec<(Option<&str>, Command)> = cmdlist::CmdListParser::new().parse(MONSTER_SPELLBOOK).unwrap();
+        let (labels, commands): (Vec<_>, Vec<_>) = list.into_iter().unzip();
+        let mut spell_table: HashMap<String, usize> = HashMap::new();
+        for (i, label) in labels.into_iter().enumerate() {
+            if let Some(label) = label {
+                spell_table.insert(label.to_string(), i);
+            }
+        }
+        let commands = commands.into_iter().map(|cmd| match cmd {
+            // TODO handle calls/jump to invalid labels
+            Command::CallStr(label) => Command::Call(*spell_table.get(&label).unwrap()),
+            Command::JumpStr(label) => Command::Jump(*spell_table.get(&label).unwrap()),
+            Command::JumpIfGtStr(a, b, label) => Command::JumpIfGt(a, b, *spell_table.get(&label).unwrap()),
+            _ => cmd,
+        }).collect();
+        Spellbook {
+            commands: commands,
+            spell_table: spell_table,
+        }
+    }
+
     pub fn basic() -> Spellbook {
         let mut spell_table = HashMap::new();
         spell_table.insert("left".to_string(), 0);
@@ -108,17 +133,20 @@ impl Spellbook {
     }
 }
 
-enum Command {
+pub enum Command {
     PushVal(i32), 
     PushReg(usize),
     Pop(usize),
     Copy(usize, usize),
     Store(i32, usize),
     Call(usize),
+    CallStr(String),
     Return,
     Noop,
     Jump(usize),
+    JumpStr(String),
     JumpIfGt(usize, usize, usize), // compare reg, compare reg, destination
+    JumpIfGtStr(usize, usize, String), // compare reg, compare reg, destination
 
     // operators
     Add(usize, usize, usize),
@@ -136,18 +164,18 @@ enum Command {
     PromptLocation, // result in registers x, y
 
     MoveCursor(Direction),
-    Damage(u32), // energy
+    Damage(usize), // energy
     Move(Direction),
-    Conjure(usize, u32), // spell label, energy -> result in c
-    Launch(usize, usize, usize), // object, x, y
+    //Conjure(usize, i32), // spell label, energy -> result in c
+    //Launch(usize, usize, usize), // object, x, y
 
     // Data queries
     QueryEnergy, // result in register e
     QueryLocationSelf, // result in x, y
     QueryLocationCursor, // result in x, y
-    QueryValidLocation, // params x, y - result r (bool)
-    QueryPassableLocation, // params x, y - result r (bool)
-    QueryMonsterLocation, // params x, y - result r (bool)
+    QueryValidLocation(usize, usize), // result r (bool)
+    QueryPassableLocation(usize, usize), // result r (bool)
+    QueryMonsterLocation(usize, usize), // result r (bool)
 }
 
 pub struct SpellEngine {
@@ -155,8 +183,6 @@ pub struct SpellEngine {
     stack: Vec<i32>,
     call_stack: Vec<usize>,
     pub level: Level,
-    player_spellbook: Spellbook,
-    monster_spellbook: Spellbook,
 }
 
 const STACK_SIZE: usize = 1000;
@@ -168,8 +194,6 @@ impl SpellEngine {
             stack: Vec::with_capacity(STACK_SIZE),
             call_stack: Vec::with_capacity(STACK_SIZE),
             level: level,
-            player_spellbook: Spellbook::basic(),
-            monster_spellbook: Spellbook::basic(),
         }
     }
 
@@ -244,7 +268,6 @@ impl SpellEngine {
                         break;
                     },
                     Command::Noop => None,
-                    Command::Noop => None,
                     Command::Jump(dest) => if *dest < spellbook.commands.len() {
                         instruction_pointer = *dest;
                         None
@@ -310,11 +333,13 @@ impl SpellEngine {
                             Some("Invalid location".to_string())
                         }
                     },
-                    Command::Damage(energy) => {
+                    Command::Damage(register) => {
+                        // TODO check sign of energy value
+                        let energy = self.registers[*register] as u32;
                         // TODO convert energy to damage
                         if self.level.is_monster(&cursor) {
-                            if self.level.cast(&caster_ref, *energy) {
-                                self.level.damage(&cursor, *energy);
+                            if self.level.cast(&caster_ref, energy) {
+                                self.level.damage(&cursor, energy);
                                 None
                             } else {
                                 Some("Not enough energy to attack".to_string())
@@ -324,20 +349,6 @@ impl SpellEngine {
                         }
                     },
                     Command::Move(direction) => {
-                        let (old_col, old_row) = self.level.location(&caster_ref);
-                        let (x, y) = match direction {
-                            Direction::Left => (-1, 0),
-                            Direction::Right => (1, 0),
-                            Direction::Up => (0, -1),
-                            Direction::Down => (0, 1),
-                            Direction::UpLeft => (-1, -1),
-                            Direction::UpRight => (1, -1),
-                            Direction::DownLeft => (-1, 1),
-                            Direction::DownRight => (1, 1),
-                        };
-                            
-                        let loc = (old_col as isize + x, old_row as isize + y);
-                        
                         if let Some(loc) = self.level.reify_location(direction.location(), &self.level.location(&caster_ref)) {
                             if self.level.is_passable(&loc) && !self.level.is_monster(&loc) {
                                 if self.level.cast(&caster_ref, 10) {
@@ -356,8 +367,8 @@ impl SpellEngine {
                             Some("Invalid location".to_string())
                         }
                     },
-                    Command::Conjure(_spell, _energy) => Some("conjuring not yet supported".to_string()),
-                    Command::Launch(_object, _x, _y) => Some("launching not yet supported".to_string()),
+                    //Command::Conjure(_spell, _energy) => Some("conjuring not yet supported".to_string()),
+                    //Command::Launch(_object, _x, _y) => Some("launching not yet supported".to_string()),
                     Command::QueryEnergy => {
                         self.registers[4] = self.level.get_energy(&caster_ref) as i32;
                         None
@@ -373,15 +384,15 @@ impl SpellEngine {
                         self.registers[24] = cursor.1 as i32;
                         None
                     },
-                    Command::QueryValidLocation => {
+                    Command::QueryValidLocation(x_reg, y_reg) => {
                         // TODO check i32 -> isize conversion?
-                        let loc = (self.registers[23] as isize, self.registers[24] as isize);
+                        let loc = (self.registers[*x_reg] as isize, self.registers[*y_reg] as isize);
                         self.registers[17] = if self.level.reify_location(loc, &(0, 0)).is_some() { 1 } else { 0 };
                         None
                     },
-                    Command::QueryPassableLocation => {
+                    Command::QueryPassableLocation(x_reg, y_reg) => {
                         // TODO check i32 -> isize conversion?
-                        let rel_loc = (self.registers[23] as isize, self.registers[24] as isize);
+                        let rel_loc = (self.registers[*x_reg] as isize, self.registers[*y_reg] as isize);
                         let loc = self.level.reify_location(rel_loc, &(0, 0));
                         if let Some(loc) = loc {
                             self.registers[17] = 
@@ -391,9 +402,9 @@ impl SpellEngine {
                         }
                         None
                     },
-                    Command::QueryMonsterLocation => {
+                    Command::QueryMonsterLocation(x_reg, y_reg) => {
                         // TODO check i32 -> isize conversion?
-                        let rel_loc = (self.registers[23] as isize, self.registers[24] as isize);
+                        let rel_loc = (self.registers[*x_reg] as isize, self.registers[*y_reg] as isize);
                         let loc = self.level.reify_location(rel_loc, &(0, 0));
                         if let Some(loc) = loc {
                             self.registers[17] = 
@@ -403,6 +414,10 @@ impl SpellEngine {
                         }
                         None
                     },
+                    // TODO handle this better
+                    Command::CallStr(_) => panic!("Can't execute call str"),
+                    Command::JumpStr(_) => panic!("Can't execute jump str"),
+                    Command::JumpIfGtStr(_, _, _) => panic!("Can't execute jump str"),
                 }
             }
             self.clear();

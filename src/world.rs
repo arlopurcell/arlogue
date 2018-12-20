@@ -31,8 +31,8 @@ pub struct World {
     mesh: Mesh,
     message: Option<String>,
     spell_engine: SpellEngine,
-    player_spellbook: Spellbook,
-    monster_spellbook: Spellbook,
+    // TODO customizable player spellbook
+    spellbook: Spellbook,
 }
 
 impl State for World {
@@ -40,8 +40,7 @@ impl State for World {
         let image = Image::load("nethack3.6.1tiles32.png");
         Ok(World{
             spell_engine: SpellEngine::new(Level::stupid()),
-            player_spellbook: Spellbook::basic(),
-            monster_spellbook: Spellbook::basic(),
+            spellbook: Spellbook::monster_spellbook(),
             message: None,
             assets: Asset::new(image.map(|image| {
                 SpriteSheet {
@@ -119,7 +118,7 @@ impl State for World {
                         _ => None,
                     };
                     if let Some(spell) = spell {
-                        self.message = self.spell_engine.do_turn(spell, &self.player_spellbook, &self.monster_spellbook);
+                        self.message = self.spell_engine.do_turn(spell, &self.spellbook, &self.spellbook);
                     }
                     ()
                 },
