@@ -2,18 +2,18 @@ use std::collections::HashMap;
 use std::ops::DerefMut;
 
 use crate::level::Level;
-use crate::utils::{Location, Direction};
+use crate::utils::{AbsoluteLocation, RelativeLocation, Direction};
 use crate::monster::Monster;
 
 pub struct Caster {
-    pub location: Location,
+    pub location: AbsoluteLocation,
     pub energy: u32,
     max_energy: u32,
     energy_regen: u32,
 }
 
 impl Caster {
-    pub fn simple(location: Location, energy: u32) -> Caster {
+    pub fn simple(location: AbsoluteLocation, energy: u32) -> Caster {
         Caster {
             location: location,
             energy: energy,
@@ -30,7 +30,7 @@ impl Caster {
         }
     }
 
-    pub fn move_to(&mut self, location: Location) { self.location = location }
+    pub fn move_to(&mut self, location: AbsoluteLocation) { self.location = location }
 
     pub fn regen(&mut self) {
         self.energy += self.energy_regen;
@@ -298,29 +298,16 @@ impl SpellEngine {
                     Command::PromptDirection => Some("Prompting not yet supported".to_string()),
                     Command::PromptLocation => Some("Prompting not yet supported".to_string()),
                     Command::MoveCursor(direction) => {
-                        let (old_col, old_row) = self.level.location(&caster_ref);
-                        let (x, y) = match direction {
-                            Direction::Left => (-1, 0),
-                            Direction::Right => (1, 0),
-                            Direction::Up => (0, -1),
-                            Direction::Down => (0, 1),
-                            Direction::UpLeft => (-1, -1),
-                            Direction::UpRight => (1, -1),
-                            Direction::DownLeft => (-1, 1),
-                            Direction::DownRight => (1, 1),
-                        };
-                            
-                        let loc = (old_col as isize + x, old_row as isize + y);
-                        if !self.level.is_valid_location(&loc) {
-                            Some("Invalid location".to_string())
-                        } else {
+                        if let Some(loc) = self.level.reify_location(direction.location(), &self.level.location(&caster_ref)) {
                             // TODO cursor move energy cost?
                             if self.level.cast(&caster_ref, 5) {
-                                cursor = (loc.0 as usize, loc.1 as usize);
+                                cursor = loc;
                                 None
                             } else {
                                 Some("Not enough energy to move cursor".to_string())
                             }
+                        } else {
+                            Some("Invalid location".to_string())
                         }
                     },
                     Command::Damage(energy) => {
@@ -351,18 +338,22 @@ impl SpellEngine {
                             
                         let loc = (old_col as isize + x, old_row as isize + y);
                         
-                        if self.level.is_available(&loc) {
-                            if self.level.cast(&caster_ref, 10) {
-                                // TODO check if valid move
-                                // TODO multiply cost by distance moved or just check that it's
-                                // adjacent?
-                                self.level.move_to(&caster_ref, (loc.0 as usize, loc.1 as usize));
-                                None
+                        if let Some(loc) = self.level.reify_location(direction.location(), &self.level.location(&caster_ref)) {
+                            if self.level.is_passable(&loc) && !self.level.is_monster(&loc) {
+                                if self.level.cast(&caster_ref, 10) {
+                                    // TODO check if valid move
+                                    // TODO multiply cost by distance moved or just check that it's
+                                    // adjacent?
+                                    self.level.move_to(&caster_ref, loc);
+                                    None
+                                } else {
+                                    Some("Not enough energy to move".to_string())
+                                }
                             } else {
-                                Some("Not enough energy to move".to_string())
+                                Some("That space is occupied".to_string())
                             }
                         } else {
-                            Some("That space is occupied".to_string())
+                            Some("Invalid location".to_string())
                         }
                     },
                     Command::Conjure(_spell, _energy) => Some("conjuring not yet supported".to_string()),
@@ -385,25 +376,31 @@ impl SpellEngine {
                     Command::QueryValidLocation => {
                         // TODO check i32 -> isize conversion?
                         let loc = (self.registers[23] as isize, self.registers[24] as isize);
-                        self.registers[17] = if self.level.is_valid_location(&loc) { 1 } else { 0 };
+                        self.registers[17] = if self.level.reify_location(loc, &(0, 0)).is_some() { 1 } else { 0 };
                         None
                     },
                     Command::QueryPassableLocation => {
                         // TODO check i32 -> isize conversion?
-                        let loc = (self.registers[23] as isize, self.registers[24] as isize);
-                        self.registers[17] = 
-                            if self.level.is_valid_location(&loc) && self.level.is_passable(&(loc.0 as usize, loc.1 as usize)) {
-                                1
-                            } else { 0 };
+                        let rel_loc = (self.registers[23] as isize, self.registers[24] as isize);
+                        let loc = self.level.reify_location(rel_loc, &(0, 0));
+                        if let Some(loc) = loc {
+                            self.registers[17] = 
+                                if self.level.is_passable(&loc) { 1 } else { 0 };
+                        } else {
+                            self.registers[17] = 0;
+                        }
                         None
                     },
                     Command::QueryMonsterLocation => {
                         // TODO check i32 -> isize conversion?
-                        let loc = (self.registers[23] as isize, self.registers[24] as isize);
-                        self.registers[17] = 
-                            if self.level.is_valid_location(&loc) && self.level.is_monster(&(loc.0 as usize, loc.1 as usize)) {
-                                1
-                            } else { 0 };
+                        let rel_loc = (self.registers[23] as isize, self.registers[24] as isize);
+                        let loc = self.level.reify_location(rel_loc, &(0, 0));
+                        if let Some(loc) = loc {
+                            self.registers[17] = 
+                                if self.level.is_monster(&loc) { 1 } else { 0 };
+                        } else {
+                            self.registers[17] = 0;
+                        }
                         None
                     },
                 }

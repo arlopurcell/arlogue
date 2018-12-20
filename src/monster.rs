@@ -1,5 +1,5 @@
 use crate::spells::Caster;
-use crate::utils::Location;
+use crate::utils::AbsoluteLocation;
 
 const MAX_PER_LEVEL: usize = 200;
 
@@ -25,7 +25,7 @@ pub enum MonsterType {
 }
 
 impl Monster {
-    pub fn player(location: Location) -> Monster {
+    pub fn player(location: AbsoluteLocation) -> Monster {
         Monster {
             stats: StatBlock {
                 max_hp: 20,
@@ -38,7 +38,7 @@ impl Monster {
         }
     }
 
-    pub fn ant(location: Location) -> Monster {
+    pub fn ant(location: AbsoluteLocation) -> Monster {
         Monster {
             stats: StatBlock {
                 max_hp: 10,
@@ -51,7 +51,7 @@ impl Monster {
         }
     }
 
-    pub fn location(&self) -> Location {
+    pub fn location(&self) -> AbsoluteLocation {
         self.caster.location
     }
 }

@@ -1,15 +1,5 @@
-use std::ops;
-
 pub type AbsoluteLocation = (usize, usize);
 pub type RelativeLocation = (isize, isize);
-
-impl ops::Add<RelativeLocation> for AbsoluteLocation {
-    type Output = AbsoluteLocation;
-
-    fn add(self, _rhs: RelativeLocation) -> AbsoluteLocation {
-        ((self.0 as isize + _rhs.0) as usize, (self.1 as isize + _rhs.1) as usize)
-    }
-}
 
 pub enum Direction {
     Left,
@@ -20,4 +10,19 @@ pub enum Direction {
     UpRight,
     DownLeft,
     DownRight,
+}
+
+impl Direction {
+    pub fn location(&self) -> RelativeLocation {
+        match self {
+            Direction::Left => (-1, 0),
+            Direction::Right => (1, 0),
+            Direction::Up => (0, -1),
+            Direction::Down => (0, 1),
+            Direction::UpLeft => (-1, -1),
+            Direction::UpRight => (1, -1),
+            Direction::DownLeft => (-1, 1),
+            Direction::DownRight => (1, 1),
+        }
+    }
 }
