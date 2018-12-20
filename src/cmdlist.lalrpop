@@ -1,0 +1,99 @@
+use std::str::FromStr;
+use spells::Command;
+
+grammar;
+
+pub CmdList: Vec<(Option<&'input str>, Command)> = {
+    <LabelledCmd*> => <>,
+};
+
+LabelledCmd: (Option<&'input str>, Command) = {
+    <l:Label> ":" <c:Cmd> ";" => (Some(l), c),
+    <c:Cmd> ";" => (None, c),
+}
+
+Cmd: Command = {
+    "push_val " <Value> => Command::PushVal(<>),
+    "push " <Register> => Command::PushReg(<>),
+    "pop " <Register> => Command::Pop(<>),
+    "copy " <Register> <Register> => Command::Copy(<>),
+    "store " <Value> <Register> => Command::Store(<>),
+    "call " <Label> => Command::CallStr(<>.to_string()),
+    "return" => Command::Return,
+    "noop" => Command::Noop,
+    "jump " <Label> => Command::JumpStr(<>.to_string()),
+    "jump_if_gt " <Register> <Register> <Label> => Command::JumpIfGtStr(<>.to_string()),
+
+    // operators
+    "add " <Register> <Register> <Register> => Command::Add(<>),
+    "mul " <Register> <Register> <Register> => Command::Mul(<>),
+    "sub " <Register> <Register> <Register> => Command::Sub(<>),
+    "div " <Register> <Register> <Register> => Command::Div(<>),
+    "mod " <Register> <Register> <Register> => Command::Mod(<>),
+    "and " <Register> <Register> <Register> => Command::And(<>),
+    "or " <Register> <Register> <Register> => Command::Or(<>),
+    "xor " <Register> <Register> <Register> => Command::Xor(<>),
+    "not " <Register> <Register> => Command::Not(<>),
+
+    // System calls
+    "prompt_direction" => Command::PromptDirection,
+    "prompt_location" => Command::PromptLocation,
+
+    "move_cursor " <Register> => Command::MoveCursor(<>),
+    "damage " <Register> => Command::Damage(<>),
+    "move " <Register> => Command::Move(<>),
+
+    // Data queries
+    "query_energy" => Command::QueryEnergy,
+    "query_location_self" => Command::QueryLocationSelf,
+    "query_location_cursor" => Command::QueryLocationCursor,
+    "is_valid " <Register> <Register> => Command::QueryValidLocation(<>),
+    "is_passable " <Register> <Register> => Command::QueryPassableLocation(<>),
+    "is_monster " <Register> <Register> => Command::QueryMonsterLocation(<>),
+};
+
+Register: usize = {
+    "a" => 0,
+    "b" => 1,
+    "c" => 2,
+    "d" => 3,
+    "e" => 4,
+    "f" => 5,
+    "g" => 6,
+    "h" => 7,
+    "i" => 8,
+    "j" => 9,
+    "k" => 10,
+    "l" => 11,
+    "m" => 12,
+    "n" => 13,
+    "o" => 14,
+    "p" => 15,
+    "q" => 16,
+    "r" => 17,
+    "s" => 18,
+    "t" => 19,
+    "u" => 20,
+    "v" => 21,
+    "w" => 22,
+    "x" => 23,
+    "y" => 24,
+    "z" => 25,
+};
+
+Value: i32 = {
+    r"-?[0-9]+" => i32::from_str(<>).unwrap(),
+    "#left" => 0,
+    "#right" => 1,
+    "#up" => 2,
+    "#down" => 3,
+    "#up_left" => 4,
+    "#down_left" => 5,
+    "#up_right" => 6,
+    "#down_right" => 7,
+};
+
+Label = {
+  r"[a-zA-Z][_a-zA-Z0-9]*"
+};
+
