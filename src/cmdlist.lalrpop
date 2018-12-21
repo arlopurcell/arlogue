@@ -3,12 +3,13 @@ use spells::Command;
 
 grammar;
 
-pub CmdList: Vec<(Option<&'input str>, Command)> = {
+pub CmdList: Vec<(Option<(&'input str, bool)>, Command)> = {
     <LabelledCmd*> => <>,
 };
 
-LabelledCmd: (Option<&'input str>, Command) = {
-    <l:Label> ":" <c:Cmd> ";" => (Some(l), c),
+LabelledCmd: (Option<(&'input str, bool)>, Command) = {
+    ":" <l:Label> ":" <c:Cmd> ";" => (Some((l, true)), c),
+    <l:Label> ":" <c:Cmd> ";" => (Some((l, false)), c),
     <c:Cmd> ";" => (None, c),
 }
 

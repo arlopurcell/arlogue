@@ -56,19 +56,23 @@ pub struct Spellbook {
 
 impl Spellbook {
     pub fn monster_spellbook() -> Spellbook {
-        let list: Vec<(Option<&str>, Command)> = cmdlist::CmdListParser::new().parse(MONSTER_SPELLBOOK).unwrap();
+        let list: Vec<(Option<(&str, bool)>, Command)> = cmdlist::CmdListParser::new().parse(MONSTER_SPELLBOOK).unwrap();
         let (labels, commands): (Vec<_>, Vec<_>) = list.into_iter().unzip();
         let mut spell_table: HashMap<String, usize> = HashMap::new();
+        let mut label_table: HashMap<String, usize> = HashMap::new();
         for (i, label) in labels.into_iter().enumerate() {
-            if let Some(label) = label {
-                spell_table.insert(label.to_string(), i);
+            if let Some((label, is_spell)) = label {
+                if is_spell {
+                    spell_table.insert(label.to_string(), i);
+                }
+                label_table.insert(label.to_string(), i);
             }
         }
         let commands = commands.into_iter().map(|cmd| match cmd {
             // TODO handle calls/jump to invalid labels
-            Command::CallStr(label) => Command::Call(*spell_table.get(&label).unwrap()),
-            Command::JumpStr(label) => Command::Jump(*spell_table.get(&label).unwrap()),
-            Command::JumpIfGtStr(a, b, label) => Command::JumpIfGt(a, b, *spell_table.get(&label).unwrap()),
+            Command::CallStr(label) => Command::Call(*label_table.get(&label).unwrap()),
+            Command::JumpStr(label) => Command::Jump(*label_table.get(&label).unwrap()),
+            Command::JumpIfGtStr(a, b, label) => Command::JumpIfGt(a, b, *label_table.get(&label).unwrap()),
             _ => cmd,
         }).collect();
         Spellbook {
